@@ -1509,14 +1509,7 @@ public class CallAudioRouteController extends CallsManagerListenerBase
             }
             case RINGING_FOCUS -> {
                 if (!mIsActive) {
-                    AudioRoute route = getBaseRoute(true, null);
-                    // Use the current route for handling ringing focus when the flag is enabled
-                    // unless the preferred device route is set as indicated by the audio fwk. We
-                    // don't want to override this selection if the user had set a default audio
-                    // route for calls.
-                    if (!isPreferredDeviceSet()) {
-                        route = getCurrentOrPendingRoute();
-                    }
+                    AudioRoute route = getRingingFocusRoute();
                     BluetoothDevice device = mBluetoothRoutes.get(route);
                     // Check if in-band ringtone is enabled for the device; if it isn't, move to
                     // inactive route.
@@ -2099,6 +2092,27 @@ public class CallAudioRouteController extends CallsManagerListenerBase
      */
     public AudioRoute getCurrentOrPendingRoute() {
         return mIsPending ? mPendingAudioRoute.getDestRoute() : mCurrentRoute;
+    }
+
+    /**
+     * Route for ringing focus: the current route, unless the preferred device route is set by
+     * the audio framework (a default route the user chose), or a Bluetooth route is available
+     * while the current route is nothing or the earpiece - then ring over Bluetooth.
+     */
+    private AudioRoute getRingingFocusRoute() {
+        AudioRoute route = getBaseRoute(true, null);
+        if (isPreferredDeviceSet()) {
+            return route;
+        }
+        AudioRoute currentRoute = getCurrentOrPendingRoute();
+        return shouldUseBaselineForRinging(route, currentRoute) ? route : currentRoute;
+    }
+
+    private boolean shouldUseBaselineForRinging(AudioRoute route, AudioRoute currentRoute) {
+        return route != null
+                && BT_AUDIO_ROUTE_TYPES.contains(route.getType())
+                && (currentRoute == null || currentRoute.equals(DUMMY_ROUTE)
+                        || currentRoute.getType() == AudioRoute.TYPE_EARPIECE);
     }
 
     public AudioRoute getBluetoothRoute(
